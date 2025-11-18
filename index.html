@@ -13,7 +13,6 @@
             padding: 20px;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             color: white;
-            box-sizing: border-box;
         }
 
         header {
@@ -39,9 +38,12 @@
             filter: brightness(1.1);
         }
 
-        #target {
-            font-size: 1.1rem;
-            font-weight: bold;
+        #doesNotExistBtn.green {
+            background: linear-gradient(135deg, #a5ffb0, #2ecc71);
+        }
+
+        #doesNotExistBtn.red {
+            background: linear-gradient(135deg, #ff8383, #b80f0f);
         }
 
         #boxes {
@@ -81,7 +83,6 @@
             border-radius: 8px;
             font-weight: bold;
             font-size: 14px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
         }
 
         .front {
@@ -100,8 +101,13 @@
             color: #0a3d00;
         }
 
-        /* Modal styling */
+        .back.lose {
+            background: linear-gradient(135deg, #ff8383, #b80f0f) !important;
+            color: white;
+        }
+
         #settingsModal {
+            z-index: 1;
             position: fixed;
             top: 0;
             left: 0;
@@ -111,35 +117,14 @@
             display: none;
             justify-content: center;
             align-items: center;
-            z-index: 1;
         }
 
         #settingsContent {
-            background: linear-gradient(135deg, #ffffff, #dfe9f3);
+            background: white;
+            color: #222;
             padding: 20px;
             border-radius: 10px;
             width: 320px;
-            color: #222;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-        }
-
-        #settingsContent h3 {
-            margin-top: 0;
-        }
-
-        #settingsContent label {
-            font-size: 0.9rem;
-        }
-
-        #settingsContent input[type="range"] {
-            width: 100%;
-        }
-
-        #settingsButtons {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 10px;
         }
     </style>
 </head>
@@ -148,269 +133,152 @@
     <header>
         <button id="resetBtn">Reset</button>
         <button id="settingsBtn">Settings</button>
+        <button id="doesNotExistBtn">Value Does Not Exist</button>
         <div id="target"></div>
         <div>Opened: <span id="openedCount">0</span></div>
     </header>
 
-    <!-- Modal -->
+    <!-- Settings Modal -->
     <div id="settingsModal">
         <div id="settingsContent">
             <h3>Settings</h3>
-
-            <label>Number of Boxes: <span id="boxCountLabel"></span></label><br />
-            <input type="range" id="boxCount" min="10" max="1000" step="10" /><br /><br />
-
-            <label>Max Hidden Number: <span id="maxNumLabel"></span></label><br />
-            <input type="range" id="maxNum" min="100" max="20000" step="100" /><br /><br />
-
-            <label><input type="checkbox" id="allowRepeats" /> Allow Repeated Numbers</label><br /><br />
-
-            <label>Scenario:</label><br />
+            <label>Number of Boxes: <span id="boxCountLabel"></span></label><br>
+            <input type="range" id="boxCount" min="10" max="1000" step="10"><br><br>
+            <label>Max Hidden Number: <span id="maxNumLabel"></span></label><br>
+            <input type="range" id="maxNum" min="100" max="20000" step="100"><br><br>
+            <label><input type="checkbox" id="allowRepeats"> Allow Repeats</label><br><br>
+            <label>Scenario:</label><br>
             <select id="scenarioSelect">
-                <option value="0">0<!--Normal--></option>
-                <option value="1">1<!--Target is first--></option>
-                <option value="2">2<!--Target is last--></option>
-                <option value="3">3<!--n-1, n+1, all others n--></option>
-                <option value="4">4<!--Range n-i to n--></option>
-            </select>
-
-            <div id="settingsButtons">
-                <button id="applySettings">Apply</button>
-                <button id="cancelSettings">Cancel</button>
-            </div>
+                <option value="0">0<!-- Normal Sorted--></option>
+                <option value="1">1<!-- Target First--></option>
+                <option value="2">2<!-- Target Last--></option>
+                <option value="3">3<!-- n-1 / n / n+1 Pattern--></option>
+                <option value="4">4<!-- Range n-i to n--></option>
+                <option value="5">5<!-- Unsorted Random--></option>
+                <option value="6">6<!-- Target Not Present--></option>
+            </select><br><br>
+            <button id="applySettings">Apply</button>
+            <button id="cancelSettings">Cancel</button>
         </div>
     </div>
 
     <div id="boxes"></div>
 
     <script>
-        const boxesContainer = document.getElementById('boxes');
-        const resetBtn = document.getElementById('resetBtn');
-        const openedCount = document.getElementById('openedCount');
-        const target = document.getElementById('target');
+        let boxesContainer = document.getElementById("boxes"), resetBtn = document.getElementById("resetBtn"), openedCount = document.getElementById("openedCount"), target = document.getElementById("target"), doesNotExistBtn = document.getElementById("doesNotExistBtn"), modal = document.getElementById("settingsModal"), settingsBtn = document.getElementById("settingsBtn"), applySettings = document.getElementById("applySettings"), cancelSettings = document.getElementById("cancelSettings"), scenarioSelect = document.getElementById("scenarioSelect"), boxCountSlider = document.getElementById("boxCount"), boxCountLabel = document.getElementById("boxCountLabel"), maxNumSlider = document.getElementById("maxNum"), maxNumLabel = document.getElementById("maxNumLabel"), allowRepeats = document.getElementById("allowRepeats");
 
-        const modal = document.getElementById('settingsModal');
-        const settingsBtn = document.getElementById('settingsBtn');
-        const applySettings = document.getElementById('applySettings');
-        const cancelSettings = document.getElementById('cancelSettings');
-        const scenarioSelect = document.getElementById('scenarioSelect');
+        let hiddenNumbers = [], opened = 0, gameEnded = false, boxCount = 250, maxHidden = 1000, repeats = true, scenario = 0, targetNumber = null;
 
-        const boxCountSlider = document.getElementById('boxCount');
-        const boxCountLabel = document.getElementById('boxCountLabel');
-        const maxNumSlider = document.getElementById('maxNum');
-        const maxNumLabel = document.getElementById('maxNumLabel');
-        const allowRepeats = document.getElementById('allowRepeats');
+        boxCountSlider.value = boxCount; boxCountLabel.textContent = boxCount;
+        maxNumSlider.value = maxHidden; maxNumLabel.textContent = maxHidden;
 
-        let hiddenNumbers = [];
-        let opened = 0;
-        let gameEnded = false;
+        boxCountSlider.oninput = () => { boxCountLabel.textContent = boxCountSlider.value; };
+        maxNumSlider.oninput = () => { maxNumLabel.textContent = maxNumSlider.value; };
 
-        let boxCount = 250;
-        let maxHidden = 1000;
-        let repeats = true;
-        let scenario = 0;
-        let targetNumber = null;
+        settingsBtn.onclick = () => modal.style.display = "flex";
+        cancelSettings.onclick = () => modal.style.display = "none";
 
-        // Initialise controls
-        boxCountSlider.value = boxCount;
-        boxCountLabel.textContent = boxCount;
-        maxNumSlider.value = maxHidden;
-        maxNumLabel.textContent = maxHidden;
+        applySettings.onclick = () => { modal.style.display = "none"; boxCount = parseInt(boxCountSlider.value); maxHidden = parseInt(maxNumSlider.value); repeats = allowRepeats.checked; scenario = parseInt(scenarioSelect.value); buildGrid(); };
 
-        boxCountSlider.oninput = () => {
-            boxCountLabel.textContent = boxCountSlider.value;
-        };
+        doesNotExistBtn.onclick = () => {
+            if (gameEnded) return;
+            gameEnded = true;
+            const exists = hiddenNumbers.includes(targetNumber);
 
-        maxNumSlider.oninput = () => {
-            maxNumLabel.textContent = maxNumSlider.value;
-        };
+            // Flip all remaining boxes
+            document.querySelectorAll('.flip').forEach(f => f.classList.add('flipped'));
 
-        settingsBtn.onclick = () => {
-            modal.style.display = 'flex';
-        };
-
-        cancelSettings.onclick = () => {
-            modal.style.display = 'none';
-        };
-
-        applySettings.onclick = () => {
-            modal.style.display = 'none';
-            boxCount = parseInt(boxCountSlider.value, 10);
-            maxHidden = parseInt(maxNumSlider.value, 10);
-            repeats = allowRepeats.checked;
-            scenario = parseInt(scenarioSelect.value, 10);
-            buildGrid();
+            if (!exists) {
+                // Correct call: target truly does not exist
+                doesNotExistBtn.classList.add('green');
+            } else {
+                // Incorrect call: target does exist somewhere
+                doesNotExistBtn.classList.add('red');
+                document.querySelectorAll('.back').forEach(b => {
+                    if (parseInt(b.textContent, 10) === targetNumber) {
+                        b.classList.add('lose');
+                    }
+                });
+            }
         };
 
         function createNormalNumbers() {
-            if (repeats) {
-                hiddenNumbers = Array.from({ length: boxCount }, () => Math.floor(Math.random() * maxHidden) + 1);
-            } else {
-                const poolSize = Math.max(maxHidden, boxCount);
-                const pool = Array.from({ length: poolSize }, (_, i) => i + 1);
+            if (repeats) hiddenNumbers = Array.from({ length: boxCount }, () => Math.floor(Math.random() * maxHidden) + 1);
+            else {
+                let pool = [...Array(Math.max(maxHidden, boxCount)).keys()].map(x => x + 1);
                 hiddenNumbers = [];
-                for (let i = 0; i < boxCount; i++) {
-                    const idx = Math.floor(Math.random() * pool.length);
-                    hiddenNumbers.push(pool[idx]);
-                    pool.splice(idx, 1);
-                }
+                for (let i = 0; i < boxCount; i++) { let idx = Math.floor(Math.random() * pool.length); hiddenNumbers.push(pool[idx]); pool.splice(idx, 1); }
             }
             hiddenNumbers.sort((a, b) => a - b);
         }
 
         function generateHiddenNumbers() {
-            hiddenNumbers = [];
-            const nMid = Math.floor(maxHidden / 2);
-
+            hiddenNumbers = []; let nMid = Math.floor(maxHidden / 2);
             switch (scenario) {
-                case 1: // target is first
-                case 2: // target is last
-                    createNormalNumbers();
+                case 1: case 2: createNormalNumbers(); break;
+                case 3:
+                    hiddenNumbers = Array(boxCount).fill(nMid);
+                    if (boxCount >= 2) { hiddenNumbers[0] = nMid - 1; hiddenNumbers[boxCount - 1] = nMid + 1; }
+                    hiddenNumbers.sort((a, b) => a - b); break;
+                case 4:
+                    let span = Math.min(boxCount, maxHidden);
+                    let start = maxHidden - span + 1; hiddenNumbers = Array.from({ length: span }, (_, i) => start + i);
+                    while (hiddenNumbers.length < boxCount) hiddenNumbers.push(maxHidden);
+                    hiddenNumbers.sort((a, b) => a - b); break;
+                case 5:
+                    hiddenNumbers = Array.from({ length: boxCount }, () => Math.floor(Math.random() * maxHidden) + 1);
                     break;
-
-                case 3: { // first n-1, last n+1, others n
-                    const n = nMid;
-                    hiddenNumbers = Array(boxCount).fill(n);
-                    if (boxCount >= 2) {
-                        hiddenNumbers[0] = n - 1;
-                        hiddenNumbers[boxCount - 1] = n + 1;
-                    }
-                    hiddenNumbers.sort((a, b) => a - b);
-                    break;
-                }
-
-                case 4: { // numbers from n-i to n (interpreted as range ending at maxHidden)
-                    const span = Math.min(boxCount, maxHidden);
-                    let start = maxHidden - span + 1;
-                    if (start < 1) start = 1;
-                    hiddenNumbers = Array.from({ length: span }, (_, i) => start + i);
-                    while (hiddenNumbers.length < boxCount) {
-                        hiddenNumbers.push(maxHidden);
-                    }
-                    hiddenNumbers.sort((a, b) => a - b);
-                    break;
-                }
-
-                default: // 0 - Normal
-                    createNormalNumbers();
-                    break;
+                case 6:
+                    createNormalNumbers(); break;
+                default:
+                    createNormalNumbers(); break;
             }
         }
 
         function chooseTargetNumber() {
-            if (!hiddenNumbers.length) return;
-
             switch (scenario) {
-                case 1: // guaranteed first
-                    targetNumber = hiddenNumbers[0];
+                case 1: targetNumber = hiddenNumbers[0]; break;
+                case 2: targetNumber = hiddenNumbers[hiddenNumbers.length - 1]; break;
+                case 3: targetNumber = Math.random() < 0.5 ? hiddenNumbers[0] : hiddenNumbers.at(-1); break;
+                case 4: targetNumber = hiddenNumbers[Math.floor(Math.random() * hiddenNumbers.length)]; break;
+                case 5: targetNumber = hiddenNumbers[Math.floor(Math.random() * hiddenNumbers.length)]; break;
+                case 6:
+                    do { targetNumber = Math.floor(Math.random() * maxHidden) + 1; }
+                    while (hiddenNumbers.includes(targetNumber));
                     break;
-                case 2: // guaranteed last
-                    targetNumber = hiddenNumbers[hiddenNumbers.length - 1];
-                    break;
-                case 3: { // either lowest or highest
-                    const minVal = hiddenNumbers[0];
-                    const maxVal = hiddenNumbers[hiddenNumbers.length - 1];
-                    targetNumber = Math.random() < 0.5 ? minVal : maxVal;
-                    break;
-                }
-                case 4: // any value in range
+                default:
                     targetNumber = hiddenNumbers[Math.floor(Math.random() * hiddenNumbers.length)];
-                    break;
-                default: // normal
-                    targetNumber = hiddenNumbers[Math.floor(Math.random() * hiddenNumbers.length)];
-                    break;
             }
         }
 
-        function endGame(correctFlip) {
-            gameEnded = true;
-            const backFace = correctFlip.querySelector('.back');
-            if (backFace) {
-                backFace.classList.add('win');
-            }
-        }
+        function endGame(flip) { gameEnded = true; flip.querySelector('.back').classList.add('win'); }
 
         function buildGrid() {
-            boxesContainer.innerHTML = '';
-            opened = 0;
-            openedCount.textContent = opened;
-            gameEnded = false;
-
-            generateHiddenNumbers();
-            chooseTargetNumber();
-
-            target.textContent = 'Find: ' + targetNumber;
+            boxesContainer.innerHTML = ""; opened = 0; openedCount.textContent = 0; gameEnded = false;
+            doesNotExistBtn.classList.remove('green', 'red');
+            generateHiddenNumbers(); chooseTargetNumber();
+            target.textContent = "Find: " + targetNumber;
 
             hiddenNumbers.forEach((num, i) => {
-                const box = document.createElement('div');
-                box.className = 'box';
+                let box = document.createElement('div'); box.className = 'box';
+                let flip = document.createElement('div'); flip.className = 'flip';
+                let front = document.createElement('div'); front.className = 'face front'; front.textContent = i + 1;
+                let back = document.createElement('div'); back.className = 'face back'; back.textContent = num;
+                flip.appendChild(front); flip.appendChild(back); box.appendChild(flip);
 
-                const flip = document.createElement('div');
-                flip.className = 'flip';
-
-                const front = document.createElement('div');
-                front.className = 'face front';
-                front.textContent = i + 1;
-
-                const back = document.createElement('div');
-                back.className = 'face back';
-                back.textContent = num;
-
-                flip.appendChild(front);
-                flip.appendChild(back);
-                box.appendChild(flip);
-
-                box.addEventListener('click', () => {
+                box.onclick = () => {
                     if (gameEnded) return;
                     if (!flip.classList.contains('flipped')) {
-                        flip.classList.add('flipped');
-                        opened++;
-                        openedCount.textContent = opened;
-
-                        if (num === targetNumber) {
-                            endGame(flip);
-                        }
+                        flip.classList.add('flipped'); opened++; openedCount.textContent = opened;
+                        if (num === targetNumber && scenario !== 6) { endGame(flip); }
                     }
-                });
-
+                };
                 boxesContainer.appendChild(box);
             });
         }
 
-        // Basic internal checks (console only) to help with debugging the generator
-        function runSelfTests() {
-            console.log('Running internal tests...');
-
-            // Test 1: normal mode ascending and length
-            scenario = 0;
-            boxCount = 100;
-            maxHidden = 500;
-            repeats = true;
-            generateHiddenNumbers();
-            const isAscending = hiddenNumbers.every((v, idx, arr) => idx === 0 || arr[idx - 1] <= v);
-            console.assert(hiddenNumbers.length === 100, 'Test1 length failed');
-            console.assert(isAscending, 'Test1 ascending failed');
-
-            // Test 2: scenario 3 pattern
-            scenario = 3;
-            boxCount = 10;
-            maxHidden = 1000;
-            generateHiddenNumbers();
-            console.assert(hiddenNumbers[0] <= hiddenNumbers[hiddenNumbers.length - 1], 'Test2 ascending failed');
-
-            // Restore defaults for UI
-            scenario = parseInt(scenarioSelect.value, 10) || 0;
-            boxCount = parseInt(boxCountSlider.value, 10) || 250;
-            maxHidden = parseInt(maxNumSlider.value, 10) || 1000;
-            repeats = allowRepeats.checked;
-        }
-
-        resetBtn.addEventListener('click', buildGrid);
-
-        // Initial build
+        resetBtn.onclick = buildGrid;
         buildGrid();
-        // Uncomment if you want to see console tests
-        // runSelfTests();
     </script>
 </body>
 
